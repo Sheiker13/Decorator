@@ -1,3 +1,4 @@
+import asyncio
 from functools import wraps
 
 
@@ -7,7 +8,16 @@ class Cache:
 
     def __call__(self, func):
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        async def async_wrapper(*args, **kwargs):
+            key = (func, args, frozenset(kwargs.items()))
+            if key in self.data:
+                return self.data[key]
+            result = await func(*args, **kwargs)
+            self.data[key] = result
+            return result
+
+        @wraps(func)
+        def sync_wrapper(*args, **kwargs):
             key = (func, args, frozenset(kwargs.items()))
             if key in self.data:
                 return self.data[key]
@@ -15,7 +25,10 @@ class Cache:
             self.data[key] = result
             return result
 
-        return wrapper
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper
+        else:
+            return sync_wrapper
 
     def invalidate(self, func):
         keys_to_remove = [key for key in self.data if key[0] == func]
